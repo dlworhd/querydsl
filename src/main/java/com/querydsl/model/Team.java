@@ -10,6 +10,10 @@ import java.util.List;
 @NoArgsConstructor
 public class Team {
 
+	public Team(String name) {
+		this.name = name;
+	}
+
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private Long id;

@@ -1,13 +1,16 @@
 package com.querydsl;
 
+import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.Tuple;
-import com.querydsl.core.types.Expression;
+import com.querydsl.core.types.ExpressionUtils;
+import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.core.types.dsl.NumberExpression;
 import com.querydsl.jpa.JPAExpressions;
 import com.querydsl.jpa.impl.JPAQueryFactory;
-import com.querydsl.model.Member;
+import com.querydsl.model.*;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.EntityManagerFactory;
 import jakarta.persistence.PersistenceContext;
@@ -43,6 +46,30 @@ public class QueryDSLTest {
 		factory = new JPAQueryFactory(em);
 	}
 
+	@Test
+	public void ttt() {
+
+
+//		for (long i = 1; i <= 100; i++) {
+//			Member member = new Member();
+//			member.setAge((int)(Math.random() * 100 + 1));
+//			member.setName("TEST" + i);
+//			em.persist(member);
+//		}
+
+//		for (int i = 1; i <= 10; i++) {
+//			Team team = new Team();
+//			team.setName("Team" + i);
+//			em.persist(team);
+//		}
+
+		for (long i = 1; i <= 100; i++) {
+			Member member = em.find(Member.class, i);
+			Team team = em.find(Team.class, (long) (Math.random() * 10 + 1));
+			member.setTeam(team);
+		}
+
+	}
 
 	@Test
 	public void findMember() throws Exception {
@@ -228,7 +255,7 @@ public class QueryDSLTest {
 	}
 
 	@Test
-	public void constant(){
+	public void constant() {
 
 //		List<Tuple> tuples = factory.select(member, Expressions.constant("A"))
 //				.from(member)
@@ -246,6 +273,181 @@ public class QueryDSLTest {
 		for (String s : concat) {
 			System.out.println(s);
 		}
+	}
+
+
+	// 문법 중급
+
+
+	@Test
+	public void projection_bean() {
+
+		List<MemberDto> fetch = factory
+				.select(Projections.bean(MemberDto.class, member.name, member.age))
+				.from(member)
+				.fetch();
+		for (MemberDto memberDto : fetch) {
+			System.out.println(memberDto);
+		}
+	}
+
+	@Test
+	public void projection_field() {
+		List<MemberDto> fetch = factory
+				.select(Projections.fields(MemberDto.class, member.name, member.age))
+				.from(member)
+				.fetch();
+		for (MemberDto memberDto : fetch) {
+			System.out.println(memberDto);
+		}
+	}
+
+	@Test
+	public void projection_as() {
+		List<MemberDto> fetch = factory
+				.select(Projections
+						.fields(MemberDto.class, member.name.as("name"),
+								ExpressionUtils.as(JPAExpressions.select(member.age.max()).from(member), "age"))
+				).from(member)
+				.fetch();
+		for (MemberDto memberDto : fetch) {
+			System.out.println(memberDto);
+		}
+	}
+
+	@Test
+	public void projection_constructor() {
+		List<MemberDto> fetch = factory
+				.select(Projections.constructor(MemberDto.class, member.name, member.age))
+				.from(member)
+				.fetch();
+		for (MemberDto memberDto : fetch) {
+			System.out.println(memberDto.toString());
+		}
+	}
+
+	@Test
+	public void projection_QMemberDto_constructor() {
+		List<MemberDto> fetch = factory
+				.select(new QMemberDto(member.name, member.team.name, member.age))
+				.from(member)
+				.fetch();
+		for (MemberDto memberDto : fetch) {
+			System.out.println(memberDto.toString());
+		}
+	}
+
+	@Test
+	public void distinct() {
+
+		List<Member> fetch = factory.select(member).distinct().from(member).fetch();
+
+		for (Member findMember : fetch) {
+			System.out.println(findMember);
+		}
+	}
+
+	@Test
+	public void builderTest() {
+
+		List<Member> members = searchMember1("TEST49", 80);
+		for (Member findMember : members) {
+			System.out.println(findMember.toString());
+		}
 
 	}
+
+	public List<Member> searchMember1(String nameCond, Integer ageCond) {
+		BooleanBuilder booleanBuilder = new BooleanBuilder();
+
+		if (nameCond != null) {
+			booleanBuilder.and(member.name.eq(nameCond));
+		}
+
+		if (ageCond != null) {
+			booleanBuilder.and(member.age.eq(ageCond));
+		}
+
+		return factory.select(member).from(member).where(booleanBuilder).fetch();
+	}
+
+	public List<Member> searchMember2(String name, Integer age) {
+		return factory.selectFrom(member).where(nameEq(name), ageEq(age)).fetch();
+	}
+
+	public List<Member> searchMember3(String name, Integer age) {
+		return factory.selectFrom(member).where(allEq(name, age)).fetch();
+	}
+
+	public BooleanExpression nameEq(String nameCond) {
+		return nameCond != null ? member.name.eq(nameCond) : null;
+	}
+
+	public BooleanExpression ageEq(Integer ageCond) {
+		return ageCond != null ? member.age.eq(ageCond) : null;
+	}
+
+	public BooleanExpression allEq(String name, Integer ageCond) {
+		return nameEq(name).and(ageEq(ageCond));
+	}
+
+
+	@Test
+	public void bulk() {
+		long execute = factory
+				.update(member)
+				.set(member.name, member.name.concat("+"))
+				.where(member.name.like("%2"))
+				.execute();
+
+		List<Member> fetch = factory.selectFrom(member).fetch();
+		for (Member findMember : fetch) {
+			System.out.println(findMember.toString());
+		}
+	}
+
+
+	@Test
+	public void condition() {
+		MemberSearchCondition cond = new MemberSearchCondition();
+		cond.setAgeGoe(0);
+		cond.setAgeLoe(100);
+		cond.setTeamname("Team1");
+
+		List<MemberDto> fetch = factory
+				.select(new QMemberDto(
+						member.name,
+						team.name,
+						member.age
+				))
+				.from(member)
+				.leftJoin(member.team, team)
+				.where(
+						teamNameEq(cond.getTeamname()),
+						nameEq(cond.getUsername()),
+						ageGoe(cond.getAgeGoe()),
+						ageLoe(cond.getAgeLoe())
+				)
+				.fetch();
+
+		for (MemberDto memberDto : fetch) {
+			System.out.println(memberDto.toString());
+		}
+
+
+	}
+
+	public BooleanExpression teamNameEq(String teamNameCond) {
+		return teamNameCond != null ? team.name.eq(teamNameCond) : null;
+	}
+
+	public BooleanExpression ageGoe(Integer ageCond) {
+		return ageCond != null ? member.age.goe(ageCond) : null;
+	}
+
+	public BooleanExpression ageLoe(Integer ageCond) {
+		return ageCond != null ? member.age.loe(ageCond) : null;
+	}
+
+
 }
